@@ -23,4 +23,9 @@ public class UserFile {
     private String fileName;
 
     private String file;
+
+    public UserFile(String hash, String file){
+        this.hash = hash;
+        this.file = file;
+    }
 }

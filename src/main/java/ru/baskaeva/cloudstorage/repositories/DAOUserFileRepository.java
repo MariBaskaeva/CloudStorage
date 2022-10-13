@@ -1,12 +1,20 @@
 package ru.baskaeva.cloudstorage.repositories;
 
+import org.hibernate.Criteria;
+import org.hibernate.query.criteria.internal.CriteriaBuilderImpl;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Repository;
+import ru.baskaeva.cloudstorage.models.User;
 import ru.baskaeva.cloudstorage.models.UserFile;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import javax.persistence.*;
+import javax.persistence.criteria.CriteriaBuilder;
 import javax.transaction.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.hibernate.cfg.AvailableSettings.PERSISTENCE_UNIT_NAME;
 
 @Repository
 public class DAOUserFileRepository implements CommandLineRunner {
@@ -21,13 +29,34 @@ public class DAOUserFileRepository implements CommandLineRunner {
         entityManager.persist(file);
     }
 
-    public UserFile fileGet(String url){
-        return new UserFile();
+    @Transactional
+    public Optional<UserFile> fileGet(String hash){
+        UserFile file = entityManager.find(UserFile.class, hash);
+        return file == null ? Optional.empty() : Optional.of(file);
     }
 
-    public void fileDelete(String url) {
+    @Transactional
+    public void fileDelete(String fileName) {
+        Query query = entityManager.createQuery("delete from UserFile u where u.fileName = :fileName");
+        query.setParameter("fileName", fileName);
+        query.executeUpdate();
     }
 
-    public void filePut(String fileName) {
+    @Transactional
+    public void filePut(String fileName, String name) {
+        Query query = entityManager.createQuery("select u from UserFile u where u.fileName = :fileName");
+        query.setParameter("fileName", fileName);
+        UserFile file = (UserFile) query.getSingleResult();
+
+        file.setFileName(name);
+        entityManager.persist(file);
+    }
+
+    @Transactional
+    public List fileList(Integer limit) {
+        Query query = entityManager.createQuery("select u from UserFile u ");
+        query.setMaxResults(limit);
+
+        return  query.getResultList();
     }
 }
