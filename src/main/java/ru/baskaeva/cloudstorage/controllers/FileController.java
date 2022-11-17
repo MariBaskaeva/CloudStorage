@@ -2,76 +2,73 @@ package ru.baskaeva.cloudstorage.controllers;
 
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import ru.baskaeva.cloudstorage.dto.FileDTO;
+import ru.baskaeva.cloudstorage.dto.FilenameDTO;
+import ru.baskaeva.cloudstorage.dto.FilenameSizeDTO;
 import ru.baskaeva.cloudstorage.errors.Error;
-import ru.baskaeva.cloudstorage.models.File;
-import ru.baskaeva.cloudstorage.models.UserFile;
-import ru.baskaeva.cloudstorage.repositories.DAOUserFileRepository;
+import ru.baskaeva.cloudstorage.exceptions.FailedDeletingException;
+import ru.baskaeva.cloudstorage.exceptions.FailedDownloadingException;
+import ru.baskaeva.cloudstorage.exceptions.FailedSavingException;
+import ru.baskaeva.cloudstorage.exceptions.IncorrectInputData;
+import ru.baskaeva.cloudstorage.service.FileService;
 
+import java.io.FileNotFoundException;
+import java.security.Principal;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
+@CrossOrigin(origins = "${frontend.endpoint}")
 @RestController
-@RequestMapping("/")
 public class FileController {
+    private final FileService service;
 
-    @Autowired
-    private DAOUserFileRepository repository;
-
-
-    @GetMapping("/file")
-    public ResponseEntity<?> fileGet(@RequestParam String hash){
-        Optional<UserFile> fileOptional = repository.fileGet(hash);
-
-        if(fileOptional.isPresent()){
-            UserFile file = fileOptional.get();
-            return new ResponseEntity<>(new File(file.getHash() ,file.getFile()), HttpStatus.OK);
-        }
-        return new ResponseEntity<>(new Error("Error input data", 0), HttpStatus.BAD_REQUEST);
+    public FileController(FileService fileService) {
+        service = fileService;
     }
 
-    @ModelAttribute(name = "file")
-    public UserFile getFile() {
-        return new UserFile();
+    @GetMapping("/file")
+    public ResponseEntity<?> fileGet(@RequestParam String filename, Principal principal) throws FailedDownloadingException, FileNotFoundException, IncorrectInputData {
+        log.info(principal.getName());
+
+        return ResponseEntity.ok(service.download(principal.getName(), filename));
+    }
+
+    @ModelAttribute(name = "fileDTO")
+    public FileDTO getFile() {
+        return new FileDTO();
     }
 
     @PostMapping("/file")
-    public ResponseEntity<Error> filePost(@ModelAttribute UserFile file) {
-        log.info("File: {}", file);
-        try {
-            repository.filePost(file);
-        } catch (Exception ex) {
-            return new ResponseEntity<>(new Error("Error input data", 0), HttpStatus.BAD_REQUEST);
-        }
-        return ResponseEntity.ok().build();
+    @ResponseStatus(HttpStatus.OK)
+    public void filePost(@ModelAttribute FileDTO fileDTO, Principal principal) throws FailedSavingException, IncorrectInputData {
+        log.info("{}", fileDTO.getFilename());
+
+        service.upload(principal.getName(), fileDTO.getFilename(), fileDTO.getFile());
     }
 
     @DeleteMapping("/file")
-    public ResponseEntity<Error> fileDelete(@RequestParam String fileName){
-        try {
-            repository.fileDelete(fileName);
-        } catch (Exception ex) {
-            return new ResponseEntity<>(new Error("Error input data", 0), HttpStatus.BAD_REQUEST);
-        }
+    public ResponseEntity<Error> fileDelete(@RequestParam String filename, Principal principal) throws FailedDeletingException, IncorrectInputData, FileNotFoundException {
+        service.delete(principal.getName(), filename);
+
         return ResponseEntity.ok().build();
     }
 
-    @PutMapping (value = "/file")
-    public void filePut(@RequestParam String fileName, @RequestBody Map<String, String> name){
-        repository.filePut(fileName, name.get("name"));
+    @PutMapping(value = "/file")
+    public ResponseEntity<?> filePut(@RequestParam("filename") String filename, @RequestBody FilenameDTO name, Principal principal) throws FileNotFoundException, IncorrectInputData {
+        service.rename(principal.getName(), filename, name.getFilename());
+
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/list")
-    public ResponseEntity<?> list(@RequestParam Integer limit){
-        if(limit < 0)
-            return new ResponseEntity<>(new Error("Error input data", 0), HttpStatus.BAD_REQUEST);
+    public List<FilenameSizeDTO> getList(@RequestParam Integer limit, Principal principal) {
+        log.info(principal.getName());
 
-        List userFileList = repository.fileList(limit);
-        return new ResponseEntity<>(userFileList, HttpStatus.OK);
+        return service.getList(principal.getName(), limit);
     }
+
+
 }
